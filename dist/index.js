@@ -101,6 +101,11 @@
     function toggle_class(element, name, toggle) {
         element.classList[toggle ? 'add' : 'remove'](name);
     }
+    function custom_event(type, detail) {
+        const e = document.createEvent('CustomEvent');
+        e.initCustomEvent(type, false, false, detail);
+        return e;
+    }
 
     let current_component;
     function set_current_component(component) {
@@ -119,6 +124,20 @@
     }
     function onDestroy(fn) {
         get_current_component().$$.on_destroy.push(fn);
+    }
+    function createEventDispatcher() {
+        const component = get_current_component();
+        return (type, detail) => {
+            const callbacks = component.$$.callbacks[type];
+            if (callbacks) {
+                // TODO are there situations where events could be dispatched
+                // in a server (non-DOM) environment?
+                const event = custom_event(type, detail);
+                callbacks.slice().forEach(fn => {
+                    fn.call(component, event);
+                });
+            }
+        };
     }
     function setContext(key, context) {
         get_current_component().$$.context.set(key, context);
@@ -471,6 +490,7 @@
     function instance($$self, $$props, $$invalidate) {
     	let $selectedTab;
     	let { selectedTabIndex = 0 } = $$props;
+    	const dispatch = createEventDispatcher();
     	const tabElements = [];
     	const tabs = [];
     	const panels = [];
@@ -490,6 +510,7 @@
     		$$invalidate(2, selectedTabIndex = tabs.indexOf(tab));
     		selectedTab.set(tab);
     		selectedPanel.set(panels[selectedTabIndex]);
+    		dispatch("tabSelected", { tab, selectedTabIndex });
     	}
 
     	setContext(TABS, {
@@ -931,7 +952,6 @@
     	}
     }
 
-    exports.TABS = TABS;
     exports.Tab = Tab;
     exports.TabList = TabList;
     exports.TabPanel = TabPanel;
